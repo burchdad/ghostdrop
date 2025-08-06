@@ -120,7 +120,7 @@ async function handleRoute(req, res, tableName, endpointPath) {
   try {
     const payload = req.body;
     const record = payload.records[0];
-    const fields = record.fields;
+    const fields = payload.records[0].fields;
 
     // Enhanced Category logic (Products table only)
     if (tableName === "Products" && fields["Category"]) {
