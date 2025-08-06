@@ -1,5 +1,5 @@
 {
-  "name": "ghostdrop-validator",
+  "name": "ghostdrop",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
