@@ -40,7 +40,7 @@ async function fetchFieldOptions() {
 }
 
 // Create missing linked record (e.g., a new Category)
-async function createLinkedRecord(table, name) {
+async function createLinkedRecord(table, fieldName, value) {
   const url = `${AIRTABLE_API_BASE}/${table}`;
   const response = await fetch(url, {
     method: "POST",
@@ -49,7 +49,7 @@ async function createLinkedRecord(table, name) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      records: [{ fields: { Name: name } }],
+      records: [{ fields: { [fieldName]: value } }],
     }),
   });
 
@@ -59,7 +59,7 @@ async function createLinkedRecord(table, name) {
 
 // Ensure linked Category exists (or create it)
 async function ensureCategoryLink(categoryName) {
-  const url = `${AIRTABLE_API_BASE}/Categories?filterByFormula={Name}="${categoryName}"`;
+  const url = `${AIRTABLE_API_BASE}/Categories?filterByFormula={Category Name}="${categoryName}"`;
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
@@ -73,7 +73,7 @@ async function ensureCategoryLink(categoryName) {
   }
 
   // Create it if not found
-  return await createLinkedRecord("Categories", categoryName);
+  return await createLinkedRecord("Categories", "Category Name", categoryName);
 }
 
 // Validate field options for select fields
@@ -125,14 +125,22 @@ async function handleRoute(req, res, tableName, endpointPath) {
 
     // Special case for Products > Category (linked record)
     if (tableName === "Products" && fields["Category"]) {
-      const categoryName = fields["Category"];
-      const linkedCategoryId = await ensureCategoryLink(categoryName);
-
-      if (!linkedCategoryId) {
-        return res.status(500).json({ error: "Failed to create category record" });
+      let categories = fields["Category"];
+      if (!Array.isArray(categories)) {
+        categories = [categories];
       }
 
-      fields["Category"] = [linkedCategoryId]; // Must be array of linked IDs
+      const linkedCategoryIds = [];
+
+      for (const cat of categories) {
+        const linkedId = await ensureCategoryLink(cat);
+        if (!linkedId) {
+          return res.status(500).json({ error: `Failed to create/find category: ${cat}` });
+        }
+        linkedCategoryIds.push(linkedId);
+      }
+
+      fields["Category"] = linkedCategoryIds; // Replace with linked record IDs
     }
 
     const fieldOptions = await fetchFieldOptions();
