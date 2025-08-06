@@ -59,7 +59,7 @@ async function createLinkedRecord(table, fieldName, value) {
 
 // Ensure linked Category exists (or create it)
 async function ensureCategoryLink(categoryName) {
-  const url = `${AIRTABLE_API_BASE}/Categories?filterByFormula={Category Name}="${categoryName}"`;
+  const url = `${AIRTABLE_API_BASE}/Categories?filterByFormula={Name}="${categoryName}"`;
   const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
@@ -72,7 +72,7 @@ async function ensureCategoryLink(categoryName) {
     return data.records[0].id;
   }
 
-  return await createLinkedRecord("Categories", "Category Name", categoryName);
+  return await createLinkedRecord("Categories", "Name", categoryName);
 }
 
 // Validate field options for select fields
