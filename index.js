@@ -115,7 +115,7 @@ app.post("/embeds", (req, res) =>
 );
 
 app.get("/", (req, res) => {
-  res.send("👻 GhostDrop Validator is live");
+  res.send("👻 GhostDrop is live");
 });
 
 const PORT = process.env.PORT || 3000;
