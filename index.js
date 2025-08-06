@@ -68,11 +68,10 @@ async function ensureCategoryLink(categoryName) {
   });
 
   const data = await response.json();
-  if (data.records.length > 0) {
-    return data.records[0].id; // Return existing record ID
+  if (data.records && data.records.length > 0) {
+    return data.records[0].id;
   }
 
-  // Create it if not found
   return await createLinkedRecord("Categories", "Category Name", categoryName);
 }
 
@@ -123,24 +122,27 @@ async function handleRoute(req, res, tableName, endpointPath) {
     const record = payload.records[0];
     const fields = record.fields;
 
-    // Special case for Products > Category (linked record)
+    // Enhanced Category logic (Products table only)
     if (tableName === "Products" && fields["Category"]) {
       let categories = fields["Category"];
-      if (!Array.isArray(categories)) {
-        categories = [categories];
-      }
+      const isRecordIds = Array.isArray(categories) && categories.every((v) => v.startsWith("rec"));
 
-      const linkedCategoryIds = [];
-
-      for (const cat of categories) {
-        const linkedId = await ensureCategoryLink(cat);
-        if (!linkedId) {
-          return res.status(500).json({ error: `Failed to create/find category: ${cat}` });
+      if (!isRecordIds) {
+        if (!Array.isArray(categories)) {
+          categories = [categories];
         }
-        linkedCategoryIds.push(linkedId);
-      }
 
-      fields["Category"] = linkedCategoryIds; // Replace with linked record IDs
+        const linkedCategoryIds = [];
+        for (const cat of categories) {
+          const linkedId = await ensureCategoryLink(cat);
+          if (!linkedId) {
+            return res.status(500).json({ error: `Failed to create/find category: ${cat}` });
+          }
+          linkedCategoryIds.push(linkedId);
+        }
+
+        fields["Category"] = linkedCategoryIds;
+      }
     }
 
     const fieldOptions = await fetchFieldOptions();
