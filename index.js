@@ -9,6 +9,7 @@ const AIRTABLE_BASE_ID = "app39rqq10aRiXVcB";
 const AIRTABLE_API_TOKEN = process.env.AIRTABLE_API_TOKEN;
 const AIRTABLE_API_BASE = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}`;
 
+// Fetch allowed field values from Airtable metadata (for validation)
 async function fetchFieldOptions() {
   const url = `https://api.airtable.com/v0/meta/bases/${AIRTABLE_BASE_ID}/tables`;
   const response = await fetch(url, {
@@ -38,9 +39,46 @@ async function fetchFieldOptions() {
   return options;
 }
 
+// Create missing linked record (e.g., a new Category)
+async function createLinkedRecord(table, name) {
+  const url = `${AIRTABLE_API_BASE}/${table}`;
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      records: [{ fields: { Name: name } }],
+    }),
+  });
+
+  const result = await response.json();
+  return result.records?.[0]?.id;
+}
+
+// Ensure linked Category exists (or create it)
+async function ensureCategoryLink(categoryName) {
+  const url = `${AIRTABLE_API_BASE}/Categories?filterByFormula={Name}="${categoryName}"`;
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${AIRTABLE_API_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const data = await response.json();
+  if (data.records.length > 0) {
+    return data.records[0].id; // Return existing record ID
+  }
+
+  // Create it if not found
+  return await createLinkedRecord("Categories", categoryName);
+}
+
+// Validate field options for select fields
 async function validateFields(payload, tableName, fieldOptions) {
   const invalidFields = [];
-
   const record = payload.records[0];
   const fields = record.fields;
 
@@ -62,6 +100,7 @@ async function validateFields(payload, tableName, fieldOptions) {
   return invalidFields;
 }
 
+// Forward sanitized payload to Airtable
 async function forwardToAirtable(endpoint, payload) {
   const url = `${AIRTABLE_API_BASE}/${endpoint}`;
   const response = await fetch(url, {
@@ -77,9 +116,25 @@ async function forwardToAirtable(endpoint, payload) {
   return result;
 }
 
+// Core handler that validates and routes payload
 async function handleRoute(req, res, tableName, endpointPath) {
   try {
     const payload = req.body;
+    const record = payload.records[0];
+    const fields = record.fields;
+
+    // Special case for Products > Category (linked record)
+    if (tableName === "Products" && fields["Category"]) {
+      const categoryName = fields["Category"];
+      const linkedCategoryId = await ensureCategoryLink(categoryName);
+
+      if (!linkedCategoryId) {
+        return res.status(500).json({ error: "Failed to create category record" });
+      }
+
+      fields["Category"] = [linkedCategoryId]; // Must be array of linked IDs
+    }
+
     const fieldOptions = await fetchFieldOptions();
     const errors = await validateFields(payload, tableName, fieldOptions);
 
@@ -98,22 +153,18 @@ async function handleRoute(req, res, tableName, endpointPath) {
   }
 }
 
-app.post("/clients", (req, res) =>
-  handleRoute(req, res, "Clients", "clients")
-);
-app.post("/products", (req, res) =>
-  handleRoute(req, res, "Products", "products")
-);
+// ROUTES
+app.post("/clients", (req, res) => handleRoute(req, res, "Clients", "clients"));
+app.post("/products", (req, res) => handleRoute(req, res, "Products", "products"));
 app.post("/chatbot-scripts", (req, res) =>
   handleRoute(req, res, "Chatbot Scripts", "chatbot-scripts")
 );
 app.post("/follow-ups", (req, res) =>
   handleRoute(req, res, "Follow-Ups", "follow-ups")
 );
-app.post("/embeds", (req, res) =>
-  handleRoute(req, res, "Embeds", "embeds")
-);
+app.post("/embeds", (req, res) => handleRoute(req, res, "Embeds", "embeds"));
 
+// STATUS CHECK
 app.get("/", (req, res) => {
   res.send("👻 GhostDrop is live");
 });
